@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8"/>
+		<title>TileBreak</title>
+	</head>
+	<style>
+		.centered_div {
+			height: 700px;
+			width: 700px;
+		    margin: 0 auto;
+		}
+	</style>
+	<body onload="javascript:init()">
+		<div class="centered_div">
+		<canvas id="canvas" width="700px" height="700px" style="border: 1px solid black"></canvas>
+		</div>
+		<script type="text/javascript">
+
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+			var keysPressed = {};
+
+			var ball = {x: 200, y: 300, 
+						xspeed: 10, yspeed:10,
+						radius: 5,
+						draw: function(){
+								ctx.beginPath();
+								ctx.fillStyle = "#0000FF";
+								ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
+								ctx.fill();
+							},
+						move: function(){
+							if(ball.x < 0 || ball.x > canvas.width ) ball.xspeed = -ball.xspeed;
+							if(ball.y < 0) ball.yspeed = -ball.yspeed;
+							ball.x += ball.xspeed;
+							ball.y += ball.yspeed;
+						}
+					}; 
+
+			var paddle = {position:500, width: 100, height: 5,
+							draw: function(){
+								ctx.fillStyle = "#FF0000";
+								ctx.fillRect(this.position, canvas.height - this.height, this.width, this.height);
+							},
+							testCollision: function(ball){
+								var speedVectorMag = utility.vecLength(ball.xspeed, ball.yspeed);
+								if(utility.distance(utility.closestRectPoint(ball, {x:this.position,y:canvas.height-this.height}, this.width, this.height),ball) < speedVectorMag){
+									ball.yspeed = -ball.yspeed;
+									if(keysPressed[37]) ball.xspeed += 2;
+									if(keysPressed[39]) ball.xspeed -= 2;
+									ball.move();
+									console.log("xspeed:" + ball.xspeed + " yspeed:" + ball.yspeed)
+								}
+							}
+						};
+
+			var tileCollection = {
+				bricks : [
+						{x:5,y:70},{x:105, y:70},{x:205, y:70},{x:305, y:70},{x:405, y:70},{x:505, y:70},{x:605, y:70},
+						{x:5,y:100},{x:105, y:100},{x:205, y:100},{x:305, y:100},{x:405, y:100},{x:505, y:100},{x:605, y:100},
+					],
+				
+				brickWidth: 90,
+				brickHeight: 15,
+
+				draw: function(){
+					ctx.fillStyle = "#00FF00";
+					for(var i = 0; i < this.bricks.length; i++){
+							ctx.fillRect(this.bricks[i].x, this.bricks[i].y, this.brickWidth, this.brickHeight);
+						}
+					},
+
+				testCollision: function(ball){
+						var speedVectorMag = utility.vecLength(ball.xspeed, ball.yspeed);
+						for(var numbrick = 0; numbrick < this.bricks.length; numbrick++){
+							var cP =  utility.closestRectPoint(ball, this.bricks[numbrick], this.brickWidth, this.brickHeight);
+							if(utility.distance(cP, ball) < speedVectorMag){
+								if(cP.x == this.bricks[numbrick].x || cP.x == (this.bricks[numbrick].x + this.brickWidth)){
+									ball.xspeed = -ball.xspeed;
+								}
+								if(cP.y == this.bricks[numbrick].y || cP.y == (this.bricks[numbrick].y + this.brickHeight)){
+									ball.yspeed = -ball.yspeed;
+								}
+								this.bricks.splice(numbrick, 1);
+								return;
+							}
+						}
+					}
+			};
+
+			var utility = {
+				closestRectPoint: function(point, rect, rectWidth, rectHeight){
+					var cP ={x:0,y:0};
+					if(point.x < rect.x){
+						cP.x = rect.x;
+					}
+					else if( rect.x + rectWidth < point.x){
+						cP.x = rect.x + rectWidth;
+					}
+					else{
+						cP.x = point.x;
+					}
+
+					if(point.y < rect.y){
+						cP.y = rect.y;
+					}
+					else if( rect.y + rectHeight < point.y){
+						cP.y = rect.y + rectHeight;
+					}
+					else{
+						cP.y = point.y;
+					}
+					return cP;
+				},
+				vecLength: function(x, y){
+					return Math.sqrt(Math.pow(x,2) + Math.pow(y,2));
+				},
+				distance: function(point1, point2){
+					return Math.sqrt(Math.pow(point1.x - point2.x, 2) + Math.pow(point1.y -  point2.y, 2))
+				}
+			}
+
+			var inputHandler = {
+				handleKeyDown: function(event){
+					keysPressed[event.keyCode] = true;
+				},
+				handleKeyUp: function(event){
+					keysPressed[event.keyCode] = false;
+				},
+				handleKeys: function(){
+					if(keysPressed[37]){
+						if(paddle.position > 0){
+							paddle.position -= 15;
+						}
+					}
+					if(keysPressed[39]){
+						if(paddle.position + paddle.width < canvas.width){
+							paddle.position += 15;
+						}
+					}
+				}
+			}
+
+			function init(){
+				document.onkeydown = inputHandler.handleKeyDown;
+				document.onkeyup = inputHandler.handleKeyUp;
+				gameLoop();
+			}
+
+			//Game Loop
+			var fps = 60;
+			function gameLoop(){
+				setTimeout(function(){
+					requestAnimationFrame(gameLoop);					
+					drawScene();
+					animate();
+				}, 1000/fps);
+			}
+
+			function drawScene(){
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ball.draw();
+				paddle.draw();
+				tileCollection.draw();
+			}
+
+			function animate(){
+				inputHandler.handleKeys();
+				
+				tileCollection.testCollision(ball);
+				paddle.testCollision(ball);
+				ball.move();
+			}
+			
+		</script>
+		<div class="centered_div">
+			<p>Press Spacebar to start. Use left and right arrow keys to move paddle</p>
+		</div>
+	</body>
+</html>
