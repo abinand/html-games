@@ -11,7 +11,7 @@
 		    margin: 0 auto;
 		}
 	</style>
-	<body onload="javascript:init()">
+	<body onload="javascript:reset();splashScreen();">
 		<div class="centered_div">
 		<canvas id="canvas" width="700px" height="700px" style="border: 1px solid black"></canvas>
 		</div>
@@ -20,6 +20,17 @@
 			var canvas = document.getElementById("canvas");
 			var ctx = canvas.getContext("2d");
 			var keysPressed = {};
+			var timerId;
+
+			var scoreBanner = {
+				score: 0,
+				draw: function(){
+					ctx.font = "14px Arial";
+					ctx.fillStyle = "#338811";
+					ctx.textAlign = "center";
+					ctx.fillText("Score: " + this.score, canvas.width/2, canvas.height/2);
+				}
+			};
 
 			var ball = {x: 200, y: 300, 
 						xspeed: 10, yspeed:10,
@@ -31,8 +42,17 @@
 								ctx.fill();
 							},
 						move: function(){
-							if(ball.x < 0 || ball.x > canvas.width ) ball.xspeed = -ball.xspeed;
-							if(ball.y < 0) ball.yspeed = -ball.yspeed;
+							if(ball.x + ball.xspeed < 0 || ball.x + ball.xspeed > canvas.width ){
+								scoreBanner.score -= 1;
+								ball.xspeed = -ball.xspeed;	
+							} 
+							if(ball.y + ball.yspeed < 0){
+								scoreBanner.score-= 1;
+								ball.yspeed = -ball.yspeed;	
+							} 
+							if(ball.y > canvas.height){
+								splashScreen(true);	
+							}
 							ball.x += ball.xspeed;
 							ball.y += ball.yspeed;
 						}
@@ -47,20 +67,15 @@
 								var speedVectorMag = utility.vecLength(ball.xspeed, ball.yspeed);
 								if(utility.distance(utility.closestRectPoint(ball, {x:this.position,y:canvas.height-this.height}, this.width, this.height),ball) < speedVectorMag){
 									ball.yspeed = -ball.yspeed;
-									if(keysPressed[37]) ball.xspeed += 2;
-									if(keysPressed[39]) ball.xspeed -= 2;
+									if(keysPressed[37]) ball.xspeed += 3;
+									if(keysPressed[39]) ball.xspeed -= 3;
 									ball.move();
-									console.log("xspeed:" + ball.xspeed + " yspeed:" + ball.yspeed)
 								}
 							}
 						};
 
 			var tileCollection = {
-				bricks : [
-						{x:5,y:70},{x:105, y:70},{x:205, y:70},{x:305, y:70},{x:405, y:70},{x:505, y:70},{x:605, y:70},
-						{x:5,y:100},{x:105, y:100},{x:205, y:100},{x:305, y:100},{x:405, y:100},{x:505, y:100},{x:605, y:100},
-					],
-				
+				bricks : [],
 				brickWidth: 90,
 				brickHeight: 15,
 
@@ -76,13 +91,44 @@
 						for(var numbrick = 0; numbrick < this.bricks.length; numbrick++){
 							var cP =  utility.closestRectPoint(ball, this.bricks[numbrick], this.brickWidth, this.brickHeight);
 							if(utility.distance(cP, ball) < speedVectorMag){
-								if(cP.x == this.bricks[numbrick].x || cP.x == (this.bricks[numbrick].x + this.brickWidth)){
+								//change ball direction
+
+								var xLeft =  (cP.x == this.bricks[numbrick].x);
+								var xRight = (cP.x == (this.bricks[numbrick].x + this.brickWidth));
+								var yTop = (cP.y == this.bricks[numbrick].y);
+								var yBottom = (cP.y == (this.bricks[numbrick].y + this.brickHeight));
+
+								//for corners point the ball to the exact opposite direction
+								if(xLeft && yTop){
+									if(ball.xspeed > 0) ball.xspeed = -ball.xspeed;
+									if(ball.yspeed > 0) ball.yspeed = -ball.yspeed;
+								}
+								else if(xRight && yTop)
+								{
+									if(ball.xspeed < 0) ball.xspeed = -ball.xspeed;
+									if(ball.yspeed > 0) ball.yspeed = -ball.yspeed;
+								}
+								else if(xLeft && yBottom){
+									if(ball.xspeed > 0) ball.xspeed = -ball.xspeed;
+									if(ball.yspeed < 0) ball.yspeed = -ball.yspeed;	
+								}
+								else if(xRight && yBottom){
+									if(ball.xspeed < 0) ball.xspeed = -ball.xspeed;
+									if(ball.yspeed < 0) ball.yspeed = -ball.yspeed;
+								}
+								//otherwise it is a side hit
+								else if( xLeft || xRight){
 									ball.xspeed = -ball.xspeed;
 								}
-								if(cP.y == this.bricks[numbrick].y || cP.y == (this.bricks[numbrick].y + this.brickHeight)){
+								else{ //if(yTop || yBottom){
 									ball.yspeed = -ball.yspeed;
 								}
+
 								this.bricks.splice(numbrick, 1);
+								scoreBanner.score += 10;
+								if(this.bricks.length == 0){
+									splashScreen(true);
+								}
 								return;
 							}
 						}
@@ -151,8 +197,8 @@
 			//Game Loop
 			var fps = 60;
 			function gameLoop(){
-				setTimeout(function(){
-					requestAnimationFrame(gameLoop);					
+				 setTimeout(function(){
+					timerId = requestAnimationFrame(gameLoop);					
 					drawScene();
 					animate();
 				}, 1000/fps);
@@ -162,6 +208,7 @@
 				ctx.clearRect(0, 0, canvas.width, canvas.height);
 				ball.draw();
 				paddle.draw();
+				scoreBanner.draw();
 				tileCollection.draw();
 			}
 
@@ -172,10 +219,52 @@
 				paddle.testCollision(ball);
 				ball.move();
 			}
+
+			function reset(){
+				if(timerId){
+					window.cancelAnimationFrame(timerId);
+				}
+				document.onkeydown = function(event){
+					if(event.keyCode == 32){
+						init();
+						event.preventDefault();
+					}
+				};
+				scoreBanner.score = 0;
+				ball.x = 100;
+				ball.y = 200;
+				ball.xspeed = 10;
+				tileCollection.bricks = [
+						{x:5,y:70},{x:105, y:70},{x:205, y:70},{x:305, y:70},{x:405, y:70},{x:505, y:70},{x:605, y:70},
+						{x:5,y:100},{x:105, y:100},{x:205, y:100},{x:305, y:100},{x:405, y:100},{x:505, y:100},{x:605, y:100},
+						{x:95, y:300} 
+					];
+			}
+			
+
+			function splashScreen(end){
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+				ctx.font = "24px Helvetica";
+				ctx.fillStyle = "#663344";
+				ctx.textAlign = "center";
+				ctx.fillText("Tile Break", canvas.width/2, canvas.height/2 - 70);
+				
+				ctx.font = "14px Arial";
+				ctx.fillStyle = "#338811";
+				ctx.textAlign = "center";
+				ctx.fillText("Press spacebar to start. Control the paddle using right and left arrows", canvas.width/2, canvas.height/2);
+
+				if(end === true){
+					ctx.font = "14px Arial";
+					ctx.fillStyle = "#338811";
+					ctx.textAlign = "center";
+					ctx.fillText("Score: " + scoreBanner.score, canvas.width/2, canvas.height/2 + 30);
+					reset();
+				}
+			}
 			
 		</script>
-		<div class="centered_div">
-			<p>Press Spacebar to start. Use left and right arrow keys to move paddle</p>
-		</div>
 	</body>
 </html>
