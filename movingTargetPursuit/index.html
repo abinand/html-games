@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<title>Practice</title>
+	<style type="text/css">
+	html, body{
+		margin: 0;
+		overflow: hidden;
+	}
+	canvas{
+		display: block;
+	}
+	</style>
+</head>
+<body onload="game.init()">
+<canvas id="canvas" style="background-image:url('./background.png')"></canvas>
+
+<script type="text/javascript">
+	var canvas =  document.getElementById("canvas");
+	var context = canvas.getContext("2d");
+	context.canvas.width = window.innerWidth;
+	context.canvas.height = window.innerHeight;
+
+	function drawText(text, x, y){
+			context.font = "20px Arial";
+			context.fillStyle = "black";
+			context.textAlign = "center";
+			context.fillText(text, x + 100 , y+100);
+		}
+
+	var target = {
+		image: null,
+		posX: canvas.width - 128,
+		posY: canvas.height - 128,
+		speed: 150,
+		keysPressed:[],
+		movementQueue: [],
+		setup: function(){
+			this.image = document.getElementById("target");
+			document.onkeydown = function(event){
+				target.keysPressed[event.keyCode] = true;
+			};
+			document.onkeyup =  function(event){
+				target.keysPressed[event.keyCode] = false;
+			};
+		},
+		update: function(delta){
+			var newPosition = {x: this.posX, y: this.posY}, mapPoint;
+			if(this.keysPressed[38]) newPosition.y -= (this.speed * delta); // up
+			if(this.keysPressed[40]) newPosition.y += (this.speed * delta); // down
+			if(this.keysPressed[37]) newPosition.x -= (this.speed * delta); // left
+			if(this.keysPressed[39]) newPosition.x += (this.speed * delta); // right
+			mapPoint = utility.worldToMap(newPosition.x, newPosition.y);
+			if(!map.isObstacle(mapPoint) && 
+				newPosition.y > 0 && newPosition.x > 0 && newPosition.x < (canvas.width - 32) && newPosition.y < (canvas.height - 32)){ // within window bounds
+				this.posX = newPosition.x;
+				this.posY = newPosition.y;
+				if(this.movementQueue.length == 0 || !((this.movementQueue[this.movementQueue.length - 1].x == mapPoint.x) && (this.movementQueue[this.movementQueue.length-1].y == mapPoint.y))){ // ensure last point is not repeated
+					this.movementQueue.push(mapPoint);	
+				}
+			}
+		},
+		draw: function(){
+			context.drawImage(this.image, this.posX, this.posY);
+		}
+	};
+
+	var map = {
+		image: null,
+		obstacles: [],
+		numObstacles: ((canvas.width/32) * (canvas.height/32) * 0.10),
+		isObstacle: function(point){
+			check = function(elem){return (elem.x == point.x && elem.y == point.y);};
+			return (this.obstacles.filter(check).length > 0);
+		},
+		setup: function(){
+			var i = 0, mapMax = utility.worldToMap(canvas.width, canvas.height), randomPosition, targetPos = utility.worldToMap(target.posX, target.posY);
+			
+			this.image = document.getElementById("rock");
+			
+			while(i < this.numObstacles){ // add obstacles randomly throught the map
+				randomPosition = {x:(Math.floor(Math.random() * mapMax.x)), y:(Math.floor(Math.random() * mapMax.y))};
+				if(targetPos.x != randomPosition.x || targetPos.y != randomPosition.y){ // avoid drawing over target
+					this.obstacles.push(randomPosition);
+					i++;
+				}
+			}
+		},
+		draw: function(){
+			var drawingPoint = null;
+			for(var ctr=0; ctr < this.obstacles.length; ctr++){
+				drawingPoint = utility.mapToWorld(this.obstacles[ctr].x, this.obstacles[ctr].y);
+				context.drawImage(this.image, drawingPoint.x - utility.gridHalfSize, drawingPoint.y - utility.gridHalfSize);
+			}
+		}
+	};
+
+	var utility = {
+		gridHalfSize: 16,
+		lengthVec2: function(v){
+			return Math.sqrt((v.x*v.x) + (v.y*v.y));
+		},
+		normalizeVec2: function(v){
+			var result = {}, len = this.lengthVec2(v);
+			result.x = v.x / len;
+			result.y = v.y / len;
+			return result;
+		},
+		subtractVec2: function(v1, v2){
+			var result = {};
+			result.x = v1.x - v2.x;
+			result.y = v1.y - v2.y;
+			return result;
+		},
+		rotationAngle: function(x, y){
+			return Math.atan2(y,x);
+		},
+		worldToMap: function(x, y){
+			var result = {};
+			result.x = Math.round(x/32);
+			result.y = Math.round(y/32);
+			return result;
+		},
+		mapToWorld: function(x, y){
+			var result = {};
+			result.x =  (x * 32) + this.gridHalfSize;
+			result.y = (y * 32) + this.gridHalfSize;
+			return result;
+		}
+	};
+
+	var car = {
+		image: null,
+		posX: 32,
+		posY: 32,
+		speed: 220,
+		orientation: 0,
+		waypoints: [],
+		setup: function(){
+			this.image = document.getElementById("car"); // 32x32 image
+		},
+		update: function(delta){
+			var currentMapPosition = utility.worldToMap(this.posX, this.posY), 
+			targetMapPosition = utility.worldToMap(target.posX, target.posY),
+			distanceRatio;
+			if(this.waypoints.length == 0){
+				this.waypoints = this.searchPath(currentMapPosition, this.getMinCostPathPoint(currentMapPosition)); // find a path to a position near target
+				if(this.waypoints.length != 0){ // found the target
+					this.waypoints =  this.waypoints.concat(target.movementQueue);	// move along searched path and then follow target
+				}
+			}
+			else{
+				this.moveToPoint(this.waypoints[0], delta);
+				distanceRatio = (utility.lengthVec2(utility.subtractVec2(currentMapPosition,targetMapPosition)))/(target.movementQueue.length);
+				if(distanceRatio < 1){ // if cost of pursuit is greater than cost of search, restart
+					this.waypoints = [];
+				}
+			}
+		},
+		getMinCostPathPoint: function(point){
+			var minIndex = target.movementQueue.length - 1, minCost = Number.POSITIVE_INFINITY, deltaPointCost; // first best is target's current position
+			for(var i = 1; i < target.movementQueue.length; ++i){
+				deltaPointCost = utility.lengthVec2(utility.subtractVec2(point,target.movementQueue[i])) + (target.movementQueue.length - i);
+				if(deltaPointCost < minCost){
+					minIndex = i;
+					minCost = deltaPointCost;
+				}
+			}
+			target.movementQueue = target.movementQueue.slice(minIndex); // remove extra elements from the tracking queue
+			return target.movementQueue[0];
+		},
+		searchPath: function(startPoint, endPoint){ // A* search with k steps
+			var openList = [], closedList=[], lookup = [], 
+					currentNodeIndex=null, currentNode=null, 
+					adjacentNodes = [], 
+					kCounter = 100, // stop search after k steps (sense scope)
+					path = [], pathPoint;
+			
+			openList.push({
+							x:startPoint.x, 
+						    y:startPoint.y, 
+						    s:1, 
+						    h:(Math.abs(endPoint.x - startPoint.x) + Math.abs(endPoint.y - startPoint.y)), 
+						    parent: null
+						});
+
+			while(closedList.filter(function(elem){ return (elem.x == endPoint.x && elem.y == endPoint.y)}).length == 0 && (--kCounter > 0)){
+
+				currentNode = this.minCostNode(openList); 
+				s = currentNode.s + 1; // traversal cost for adjacent nodes
+				currentNodeIndex = openList.indexOf(currentNode);
+
+				currentNode = {x:currentNode.x, y: currentNode.y}; // strip extra properties and add to closed list
+				closedList.push(currentNode);
+
+				lookup[closedList.indexOf(currentNode)] = closedList.indexOf(openList[currentNodeIndex].parent);// to trace back to parent
+				openList.splice(currentNodeIndex, 1); // remove from open list
+
+				// find valid adjacent nodes and add them to open list
+				adjacentNodes = this.getAdjacentNodes(currentNode);
+				for(var nodeCtr = 0; nodeCtr < adjacentNodes.length; ++nodeCtr){
+					if(this.checkValidPath(adjacentNodes[nodeCtr], openList, closedList)){
+						openList.push({
+							x: adjacentNodes[nodeCtr].x, 
+							y: adjacentNodes[nodeCtr].y, 
+							s: s, 
+							h: (Math.abs(endPoint.x - adjacentNodes[nodeCtr].x) + Math.abs(endPoint.y - adjacentNodes[nodeCtr].y)),
+							parent: currentNode
+						});
+					}	
+				}
+			}
+
+			pathPoint = closedList.indexOf(closedList.filter(function(elem){ return(elem.x == endPoint.x && elem.y == endPoint.y)})[0]);
+			while(pathPoint != -1){ // construct final path
+				path.push(closedList[pathPoint]);
+				pathPoint = lookup[pathPoint];
+			}
+			return path.reverse();
+		},
+		getAdjacentNodes: function(node){
+			var result = [], tmpNode, topValid=false, bottomValid=false, rightValid=false, leftValid = false;
+			addNode = function(node){ 
+				if(!map.isObstacle(node)){ 
+					result.push(node);
+					return true;
+				}
+			};
+			if(node.y-1 >= 0) {
+				if(addNode({x: node.x, y: node.y - 1})){ // top
+					topValid = true;
+				}
+			}
+			if(node.y+1 < (canvas.height/32)){
+				if(addNode({x: node.x, y: node.y + 1})){ // bottom
+					bottomValid = true;
+				} 
+			}
+			if(node.x+1 < (canvas.width/32)){
+				if(addNode({x: node.x + 1, y: node.y})){ // right
+					rightValid = true;
+				}
+			}
+			if(node.x-1 >= 0){
+				if(addNode({x:node.x -1, y: node.y})){ // left
+					leftValid = true;
+				}
+			}
+
+			if(topValid && rightValid){
+				addNode({x:node.x + 1, y: node.y - 1}); // top right
+			} 
+			if(topValid && leftValid){
+				addNode({x:node.x - 1, y: node.y - 1}); // top left
+			} 
+			if(bottomValid && rightValid){
+				addNode({x:node.x + 1, y: node.y + 1}); // bottom right	
+			} 
+			if(bottomValid && leftValid){
+				addNode({x:node.x - 1, y: node.y + 1}); // bottom left
+			} 
+
+			return result;
+		},
+		checkValidPath: function(point, openList, closedList){
+			// valid point should not be in openList, closedList or obstacles
+			checkEquals = function(elem){ return (elem.x == point.x) && (elem.y == point.y) };
+			return( (openList.filter(checkEquals).length == 0) && 
+					//(map.obstacles.filter(checkEquals).length == 0) && -- redundant
+						(closedList.filter(checkEquals).length == 0));
+		},
+		minCostNode: function(list){
+			var min = Number.POSITIVE_INFINITY, minIndex = null;
+			for(var i=0;i<list.length;++i){
+				if((list[i].s + list[i].h) < min){
+					min = (list[i].s + list[i].h);
+					minIndex = i;
+				}
+			}
+			return list[minIndex];
+		},
+		moveToPoint: function(mapPoint, delta){
+			var distance = this.speed * delta, position = {x:this.posX + utility.gridHalfSize, y:this.posY + utility.gridHalfSize};
+			var destination = utility.mapToWorld(mapPoint.x, mapPoint.y);
+			var direction = utility.subtractVec2(destination, position);
+			if(Math.abs(direction.x) == 0 && Math.abs(direction.y) == 0){
+				this.waypoints = this.waypoints.slice(1);
+			}
+			else
+			{
+				distance = Math.min(distance, utility.lengthVec2(direction));
+				direction = utility.normalizeVec2(direction);
+				direction.x *= distance;
+				direction.y *= distance;
+				this.posX += direction.x;
+				this.posY += direction.y;
+				this.orientation = utility.rotationAngle(direction.x, direction.y);
+			}
+		},
+		draw: function(){
+			var text = "";
+			for(var i = 0; i< this.waypoints.length;i++){
+				text += "[" +  this.waypoints[i].x + "," + this.waypoints[i].y + "]     ";
+			}
+			context.save();
+			context.translate(this.posX + utility.gridHalfSize, this.posY + utility.gridHalfSize);
+			context.rotate(this.orientation);
+			context.drawImage(this.image, -utility.gridHalfSize, -utility.gridHalfSize);
+			context.restore();
+		}
+	};
+
+	var game = {
+		lastTime: 0,
+		init: function(){
+			this.setup();
+			this.gameLoop();
+		},
+		gameLoop: function(){
+			this.draw();
+			this.update();
+			window.requestAnimationFrame(function(){
+				game.gameLoop();
+			});
+		},
+		setup: function(){
+			target.setup();
+			car.setup();
+			map.setup();
+		},
+		draw: function(){
+			context.clearRect(0,0,canvas.width, canvas.height);
+			target.draw();
+			map.draw();
+			car.draw();
+		},
+		update: function(){
+			var timeNow = Date.now();
+			if(this.lastTime > 0){
+				var delta = (timeNow - this.lastTime)/1000.0;
+				target.update(delta);
+				car.update(delta);
+			}
+			this.lastTime = timeNow;
+		}
+	};
+</script>
+<div style="display:none">
+	<img src="./car.png" id="car"/>
+	<img src="./target.png" id="target"/>
+	<img src="./rock.png" id="rock"/>
+</div>
+
+</body>
+</html>

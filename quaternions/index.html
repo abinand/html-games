@@ -156,10 +156,6 @@
 				q.push(((sinHOver2 * sinPOver2 * cosBOver2) + (cosHOver2 * cosPOver2 * sinBOver2)).toFixed(10));
 				q.push(((sinHOver2 * cosPOver2 * cosBOver2) + (cosHOver2 * sinPOver2 * sinBOver2)).toFixed(10));
 				q.push(((cosHOver2 * sinPOver2 * cosBOver2) - (sinHOver2 * cosPOver2 * sinBOver2)).toFixed(10));
-				//q.push((-(cosHOver2 * sinPOver2 * cosBOver2) - (sinHOver2 * cosPOver2 * sinBOver2)).toFixed(10));
-				//q.push(((cosHOver2 * sinPOver2 * sinBOver2) - (sinHOver2 * cosPOver2 * cosBOver2)).toFixed(10));
-				//q.push(((sinHOver2 * sinPOver2 * cosBOver2) - (cosHOver2 * cosPOver2 * sinBOver2)).toFixed(10));
-
 				return q; // represented by 4 element array [w x y z]
 			},
 			slerp: function(q1, q2, delta){ // q1 and q2 are 4 element arrays
