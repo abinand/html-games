@@ -264,10 +264,9 @@
 			return result;
 		},
 		checkValidPath: function(point, openList, closedList){
-			// valid point should not be in openList, closedList or obstacles
+			// valid point should not be in openList or closedList
 			checkEquals = function(elem){ return (elem.x == point.x) && (elem.y == point.y) };
 			return( (openList.filter(checkEquals).length == 0) && 
-					//(map.obstacles.filter(checkEquals).length == 0) && -- redundant
 						(closedList.filter(checkEquals).length == 0));
 		},
 		minCostNode: function(list){
