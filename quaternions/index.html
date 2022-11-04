@@ -3,7 +3,7 @@
 <head>
 	<meta charset="utf-8"/>
 	<title>
-		Euler Angles vs Quaternions
+		Spherical Linear Interpolation
 	</title>
 	<style type="text/css">
 		body{
@@ -11,74 +11,75 @@
 			color: #FFF;
 		}
 		.centered_div {
-			width: 700px;
+			width: 70%;
 			height: 550px;
 			margin: 0 auto;
+			font-family: Arial, Helvetica, sans-serif;
 		}
 	</style>
 	<script type="text/javascript" src="./glMatrix-0.9.5.min.js"></script>
 	<script type="text/javascript" src="./webgl-utils.js"></script>
-
+	
 	<script id="shader-vs" type="x-shader/x-vertex">
 		attribute vec3 aVertexPosition;
 		attribute vec4 aVertexColor;
 
 		uniform mat4 uPMatrix;
 		uniform mat4 uMvMatrix;
-
+		
 		varying vec4 vColor;
-
+		
 		void main(void){
 			gl_Position = uPMatrix * uMvMatrix * vec4(aVertexPosition, 1.0);
 			vColor = aVertexColor;
 		}
 	</script>
 	
-
+	
 	<script id="shader-fs" type="x-shader/x-fragment">
 		precision mediump float;
 		varying vec4 vColor;
-
+		
 		void main(void){
 			gl_FragColor = vColor;
 		}
 	</script>
-
+	
 	<script type="text/javascript">
 		var gl;
 		var shaderProgram;
 		var fps = 60;
-
+		
 		var quaternionCubeVertexBuffer;
 		var quaternionCubeColorBuffer;
 		var quaternionCubeIndexBuffer;
 		
 		var pMatrix = mat4.create();
 		var mvMatrix = mat4.create();
-
-		var qSlerp = [0, 1, 1, 1];
+		
+		var qSlerp = [1, 0, 0, 0];
 		var qRotate;
-
+		
 		// Inputs
 		var txtHeading = 0;
 		var txtPitch = 0
 		var txtBank = 0;
-
+		
 		function drawScene(){
 			gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
 			gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
+			
 			mat4.perspective(45, gl.viewportWidth/gl.viewportHeight, 0.1, 100.0, pMatrix);
 			mat4.identity(mvMatrix);
-
+			
 			sceneUtility.pushMatrix();
 			mat4.translate(mvMatrix, [-2.0, 0, -8.0]);
-
+			
 			//quaternion slerp
 			var qAxisAngle = mathOperations.quaternionToAxisAnglePair(qSlerp);
 			mat4.rotate(mvMatrix, qAxisAngle[0], qAxisAngle.slice(1)); // angle is already in radians
-			document.getElementById("axis-angle").innerHTML = "Angle: " + qAxisAngle[0] + " radians<br/> Axis&nbsp;&nbsp;: [ x: " + qAxisAngle[1] + ", y: " + qAxisAngle[2] + ", z: " + qAxisAngle[3] + "]";
-
+			document.getElementById("axis-angle").innerHTML = "Cube oriented by <br/>Angle: " + sceneUtility.radToDeg(qAxisAngle[0]).toFixed(1) + " degrees around<br/> Axis&nbsp;&nbsp;: [ x: " + qAxisAngle[1].toFixed(3) + ", y: " + qAxisAngle[2].toFixed(3) + ", z: " + qAxisAngle[3].toFixed(3) + "]";
+			
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeVertexBuffer);
 			gl.vertexAttribPointer(shaderProgram.aVertexPosition, quaternionCubeVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeColorBuffer);
@@ -87,12 +88,12 @@
 			sceneUtility.setMatrixUniforms();
 			gl.drawElements(gl.TRIANGLES, quaternionCubeIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 			sceneUtility.popMatrix();
-
+			
 			// repeat for second cube
 			sceneUtility.pushMatrix();
 			mat4.translate(mvMatrix, [2.0, 0, -8.0]);
 			mat4.rotate(mvMatrix, qAxisAngle[0], qAxisAngle.slice(1)); // angle is already in radians
-
+			
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeVertexBuffer);
 			gl.vertexAttribPointer(shaderProgram.aVertexPosition, quaternionCubeVertexBuffer.itemSize, gl.FLOAT, false, 0, 0);
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeColorBuffer);
@@ -101,25 +102,25 @@
 			sceneUtility.setMatrixUniforms();
 			gl.drawElements(gl.TRIANGLES, quaternionCubeIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
 			sceneUtility.popMatrix();
-
+			
 		}
-
+		
 		var timeRecorded = 0
 		function animate(){
 			var timeNow = new Date().getTime();
 			if(timeRecorded != 0){
 				var elapsedTime = timeNow - timeRecorded;
 				var perSecond = 1/1000.0;
-
+				
 				if(!mathOperations.quaternionEquals(qSlerp,qRotate)){
 					qSlerp = mathOperations.slerp(qSlerp, qRotate, elapsedTime * perSecond);
 					document.getElementById("slerp").innerHTML = "w: " + qSlerp[0] + "<br/> x: " + qSlerp[1] + "<br/> y: " + qSlerp[2] + "<br/> z: " + qSlerp[3];
 				}
-
+				
 			}
 			timeRecorded = timeNow;
 		}
-
+		
 		var sceneUtility = {
 			matrixStack: [],
 			pushMatrix: function(){
@@ -139,9 +140,12 @@
 			},
 			degToRad: function(deg){
 				return deg * (Math.PI/ 180);
+			},
+			radToDeg: function(rad){
+				return rad * (180/Math.PI);
 			}
 		};
-
+		
 		var mathOperations ={
 			eulerToQuaternion: function(heading, pitch, bank){
 				var cosHOver2 = Math.cos(sceneUtility.degToRad(heading * 0.5)).toFixed(15);
@@ -150,7 +154,7 @@
 				var sinPOver2 = Math.sqrt(1 - Math.pow(cosPOver2,2));
 				var cosBOver2 = Math.cos(sceneUtility.degToRad(bank * 0.5)).toFixed(15);
 				var sinBOver2 = Math.sqrt(1 - Math.pow(cosBOver2,2));
-
+				
 				var q = new Array();
 				q.push(((cosHOver2 * cosPOver2 * cosBOver2) + (sinHOver2 * sinPOver2 * sinBOver2)).toFixed(10));
 				q.push(((sinHOver2 * sinPOver2 * cosBOver2) + (cosHOver2 * cosPOver2 * sinBOver2)).toFixed(10));
@@ -182,10 +186,10 @@
 					k0 = Math.sin((1-delta) * omega) * oneBySinOmega;
 					k1 = Math.sin(delta * omega) * oneBySinOmega;
 				}
-				result.push((k0 * q1[0] + k1 * q2[0]).toFixed(10));
-				result.push((k0 * q1[1] + k1 * q2[1]).toFixed(10));
-				result.push((k0 * q1[2] + k1 * q2[2]).toFixed(10));
-				result.push((k0 * q1[3] + k1 * q2[3]).toFixed(10));
+				result.push((k0 * q1[0] + k1 * q2[0]).toFixed(4));
+				result.push((k0 * q1[1] + k1 * q2[1]).toFixed(4));
+				result.push((k0 * q1[2] + k1 * q2[2]).toFixed(4));
+				result.push((k0 * q1[3] + k1 * q2[3]).toFixed(4));
 				return result;
 			},
 			quaternionToAxisAnglePair: function(quaternion){ 
@@ -230,15 +234,15 @@
 			},
 			quaternionEquals: function(q1, q2){
 				if((Math.abs(q1[0] - q2[0]) < 0.0001) && 
-					(Math.abs(q1[1] - q2[1]) < 0.0001) &&
-					(Math.abs(q1[2] - q2[2]) < 0.0001) &&
-					(Math.abs(q1[3] - q2[3]) < 0.0001)){
+				(Math.abs(q1[1] - q2[1]) < 0.0001) &&
+				(Math.abs(q1[2] - q2[2]) < 0.0001) &&
+				(Math.abs(q1[3] - q2[3]) < 0.0001)){
 					return true;
 				}
 				return false;
 			}
 		}
-
+		
 		function initGL(canvas){
 			try{
 				gl = WebGLUtils.setupWebGL(canvas);
@@ -250,39 +254,39 @@
 				alert("Could not initialize gl context");
 			}
 		}
-
+		
 		function initShaders(){
 			var fragmentShader = getShader(gl, "shader-fs");
 			var vertexShader = getShader(gl, "shader-vs");
-
+			
 			shaderProgram = gl.createProgram();
 			gl.attachShader(shaderProgram, vertexShader);
 			gl.attachShader(shaderProgram, fragmentShader);
 			gl.linkProgram(shaderProgram);
-
+			
 			if(!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)){
 				alert("Could not link shader programs");
 			}
-
+			
 			gl.useProgram(shaderProgram);
-
+			
 			shaderProgram.aVertexPosition = gl.getAttribLocation(shaderProgram, "aVertexPosition");
 			gl.enableVertexAttribArray(shaderProgram.aVertexPosition);
-
+			
 			shaderProgram.aVertexColor = gl.getAttribLocation(shaderProgram, "aVertexColor");
 			gl.enableVertexAttribArray(shaderProgram.aVertexColor);
-
+			
 			shaderProgram.uPMatrix = gl.getUniformLocation(shaderProgram, "uPMatrix");
 			shaderProgram.uMvMatrix = gl.getUniformLocation(shaderProgram, "uMvMatrix");
-
+			
 		}
-
+		
 		function getShader(gl, id){
 			var shaderScript = document.getElementById(id);
 			if(!shaderScript){
 				return null;
 			}
-
+			
 			var str = "";
 			var k = shaderScript.firstChild;
 			while(k){
@@ -291,7 +295,7 @@
 				}
 				k =  k.nextSibling;
 			}
-
+			
 			var shader;
 			if(shaderScript.type == "x-shader/x-fragment"){
 				shader = gl.createShader(gl.FRAGMENT_SHADER);
@@ -300,65 +304,65 @@
 			} else{
 				return null;
 			}
-
+			
 			gl.shaderSource(shader, str);
 			gl.compileShader(shader);
-
+			
 			if(!gl.getShaderParameter(shader, gl.COMPILE_STATUS)){
 				alert(gl.getShaderInfoLog(shader));
 				return null;
 			}
-
+			
 			return shader;
 		}
-
+		
 		function initBuffers(){
-
+			
 			var vertices = [
-				//Front Face
-				-1.0, -1.0, 1.0,
-				1.0, -1.0, 1.0,
-				1.0, 1.0, 1.0,
-				-1.0, 1.0, 1.0,
-
-				//Back Face
-				-1.0, -1.0, -1.0,
-				-1.0, 1.0, -1.0,
-				1.0, 1.0, -1.0,
-				1.0, -1.0, -1.0,
-
-				//Top Face
-				-1.0, 1.0, -1.0,
-				-1.0, 1.0, 1.0,
-				1.0, 1.0, 1.0,
-				1.0, 1.0, -1.0,
-
-				//Bottom Face
-				-1.0, -1.0, -1.0,
-				1.0, -1.0, -1.0,
-				1.0, -1.0, 1.0,
-				-1.0, -1.0, 1.0,
-
-				//Right Face
-				1.0, -1.0, -1.0,
-				1.0, 1.0, -1.0,
-				1.0, 1.0, 1.0,
-				1.0, -1.0, 1.0,
-
-				//Left Face
-				-1.0, -1.0, -1.0,
-				-1.0, -1.0, 1.0,
-				-1.0, 1.0, 1.0,
-				-1.0, 1.0, -1.0
+			//Front Face
+			-1.0, -1.0, 1.0,
+			1.0, -1.0, 1.0,
+			1.0, 1.0, 1.0,
+			-1.0, 1.0, 1.0,
+			
+			//Back Face
+			-1.0, -1.0, -1.0,
+			-1.0, 1.0, -1.0,
+			1.0, 1.0, -1.0,
+			1.0, -1.0, -1.0,
+			
+			//Top Face
+			-1.0, 1.0, -1.0,
+			-1.0, 1.0, 1.0,
+			1.0, 1.0, 1.0,
+			1.0, 1.0, -1.0,
+			
+			//Bottom Face
+			-1.0, -1.0, -1.0,
+			1.0, -1.0, -1.0,
+			1.0, -1.0, 1.0,
+			-1.0, -1.0, 1.0,
+			
+			//Right Face
+			1.0, -1.0, -1.0,
+			1.0, 1.0, -1.0,
+			1.0, 1.0, 1.0,
+			1.0, -1.0, 1.0,
+			
+			//Left Face
+			-1.0, -1.0, -1.0,
+			-1.0, -1.0, 1.0,
+			-1.0, 1.0, 1.0,
+			-1.0, 1.0, -1.0
 			];
-
+			
 			var colors = [
-				[1.0, 0.0, 0.0, 1.0],
-				[0.0, 1.0, 0.0, 1.0],
-				[0.0, 0.5, 0.5, 1.0],
-				[0.5, 0.0, 0.5, 1.0],
-				[0.5, 0.5, 0.0, 1.0],
-				[0.0, 0.0, 1.0, 1.0]
+			[1.0, 0.0, 0.0, 1.0],
+			[0.0, 1.0, 0.0, 1.0],
+			[0.0, 0.5, 0.5, 1.0],
+			[0.5, 0.0, 0.5, 1.0],
+			[0.5, 0.5, 0.0, 1.0],
+			[0.0, 0.0, 1.0, 1.0]
 			];
 			var unpackedColors = [];
 			for(var i=0;i<colors.length; i++){
@@ -367,85 +371,102 @@
 					unpackedColors = unpackedColors.concat(color);
 				}
 			}
-
+			
 			var cubeVertexIndices=[
-				0, 1, 2,     0, 2, 3,
-				4, 5, 6,     4, 6, 7,
-				8, 9, 10,    8, 10, 11,
-				12, 13, 14,  12, 14, 15,
-				16, 17, 18,  16, 18, 19,
-				20, 21, 22,  20, 22, 23
+			0, 1, 2,     0, 2, 3,
+			4, 5, 6,     4, 6, 7,
+			8, 9, 10,    8, 10, 11,
+			12, 13, 14,  12, 14, 15,
+			16, 17, 18,  16, 18, 19,
+			20, 21, 22,  20, 22, 23
 			];
-
+			
 			quaternionCubeVertexBuffer = gl.createBuffer();
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeVertexBuffer);
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
 			quaternionCubeVertexBuffer.itemSize = 3;
 			quaternionCubeVertexBuffer.numItems = 24;
-
+			
 			quaternionCubeColorBuffer = gl.createBuffer();
 			gl.bindBuffer(gl.ARRAY_BUFFER, quaternionCubeColorBuffer);
 			gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(unpackedColors), gl.STATIC_DRAW);
 			quaternionCubeColorBuffer.itemSize = 4;
 			quaternionCubeColorBuffer.numItems = 24;
-
+			
 			quaternionCubeIndexBuffer = gl.createBuffer();
 			gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, quaternionCubeIndexBuffer);
 			gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(cubeVertexIndices), gl.STATIC_DRAW);
 			quaternionCubeIndexBuffer.itemSize = 1;
 			quaternionCubeIndexBuffer.numItems = 36;
 		}
-
+		
 		function tick(){
 			window.setTimeout(function(){
 				window.requestAnimFrame(tick);
 				drawScene();
 				animate();
 			}, 1000/fps);
-
+			
 		}
-
+		
 		function webGLStart(){
 			var canvas = document.getElementById("canvas");
 			initGL(canvas);
 			initShaders();
 			initBuffers();
 			reset();
-
+			
 			gl.clearColor(0.0, 0.0, 0.0, 1.0);
 			gl.enable(gl.DEPTH_TEST);
 			
 			tick();
 		}
-
+		
 		function reset(){
-
+			
 			qSlerp = [1, 0, 0, 0];
 			txtHeading =  document.getElementById("heading").value;
 			txtPitch = document.getElementById("pitch").value;
 			txtBank = document.getElementById("bank").value;
 			
 			qRotate = mathOperations.eulerToQuaternion(parseFloat(txtHeading), parseFloat(txtPitch), parseFloat(txtBank));
-			document.getElementById("quaternion").innerHTML = "w: " + qRotate[0] + "<br/> x: " + qRotate[1] + "<br/> y: " + qRotate[2] + "<br/> z: " + qRotate[3];
+			document.getElementById("quaternion-w").innerHTML = "w: " + qRotate[0] + "<br/>";
+			document.getElementById("quaternion-v").innerHTML = "x: " + qRotate[1] + "<br/> y: " + qRotate[2] + "<br/> z: " + qRotate[3];
 		}
 	</script>
 </head>
 <body onload="webGLStart()">
-	<div class="centered_div">
-		<canvas id="canvas" width="700px" height="300px" style="border: 1px solid black"></canvas>
-		<div style="float:left">
-			<div><p>Euler Angles (degrees per sec):</p></div>
-			<div><p>Heading: </p><input type="text" id="heading" value="90"/></div>
-			<div><p>Pitch: </p><input type="text" id="pitch" value="90"/></div>
-			<div><p>Bank: </p><input type="text" id="bank" value="90"/></div>
-			<div><p><button onclick="javascript:reset()">Re-Calculate</button></p></div>
+	<div class="centered-div">
+		<canvas id="canvas" width="950px" height="300px" style="border: 1px solid black"></canvas>
+		<div style="float:left;width: 50%;">
+			<h1>Enter Euler Angles (degrees):</h1>
+			<div><h2>Heading:</h2><input type="text" id="heading" value="0"onchange="javascript:reset()"/></div>
+			<div><h2>Pitch: </h2><input type="text" id="pitch" value="90"onchange="javascript:reset()"/></div>
+			<div><h2>Bank: </h2><input type="text" id="bank" value="0" onchange="javascript:reset()"/></div>
+			<div><p><button style="padding:10px" onclick="javascript:reset()">Re-Calculate</button></p></div>
 		</div>
-		<div style="float:right;width:200px">
-			<div><p>Rotation Quaternion:</p><p id="quaternion"></p></div>
-			<div><p>Slerp:</p><p id="slerp"></p></div>
+		<div style="float:right;width: 50%;">
+			<h1>Equivalent Quaternion:</h1>
+			<div>
+				<p><b>w component </b> cos(angle/2):</p>
+				<p id="quaternion-w"></p>
+			</div>
+			<div>
+				<p><b>v component </b>sin(angle/2) * axis vector:</p> 
+				<p id="quaternion-v"></p>
+			</div>
+			<h2>Spherical linear interpolation:</h2>
+			<div><p id="slerp"></p></div>
+			<h2>Axis and Angle Representation:</h2>
+			<p id="axis-angle"></p>
+		</div>
+		<div>
+			<h1>How it works?</h1>
+			<p>Input the desired orientation in euler angles.</p>
+			<p>The cubes are animated from their initial orientation to the desired orientation.</p>
+			<p>The code uses <a style="color:blue;" href="https://gamemath.com/book/orient.html#quaternions">quaternion</a> spherical linear interpolation to animate the rotation.</p>
+			<p> </p>
 		</div>
 	</div>
-	<br/><br/><br/>
-	<div class="centered_div"><p>Axis and Angle:</p><p id="axis-angle"></p></div>
 </body>
 </html>
